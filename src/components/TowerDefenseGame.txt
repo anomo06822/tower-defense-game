@@ -1,6 +1,6 @@
-// components/TowerDefenseGame.js
+// components/TowerDefenseGame.tsx
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 // 翻譯資源
 const translations = {
@@ -33,7 +33,19 @@ const translations = {
 };
 
 // 塔類型定義
-const towerTypes = {
+interface TowerType {
+  cost: number;
+  damage: number;
+  range: number;
+  color: string;
+  name: {
+    en: string;
+    zh: string;
+  };
+  accuracy: number;
+}
+
+const towerTypes: { [key: string]: TowerType } = {
   basic: { cost: 50, damage: 10, range: 100, color: 'blue', name: { en: 'Basic', zh: '基礎塔' }, accuracy: 0.8 },
   sniper: { cost: 100, damage: 30, range: 200, color: 'purple', name: { en: 'Sniper', zh: '狙擊塔' }, accuracy: 0.9 },
   splash: { cost: 150, damage: 20, range: 80, color: 'green', name: { en: 'Splash', zh: '範圍塔' }, accuracy: 0.7 },
@@ -41,24 +53,35 @@ const towerTypes = {
 
 // 定義遊戲對象類
 class Tower {
-  constructor(x, y, type) {
+  x: number;
+  y: number;
+  type: string;
+  lastShot: number;
+
+  constructor(x: number, y: number, type: string) {
     this.x = x;
     this.y = y;
     this.type = type;
     this.lastShot = 0;
   }
 
-  canShoot(currentTime, gameSpeed) {
+  canShoot(currentTime: number, gameSpeed: number): boolean {
     return (currentTime - this.lastShot) > (1000 / gameSpeed);
   }
 
-  shoot(currentTime) {
+  shoot(currentTime: number): void {
     this.lastShot = currentTime;
   }
 }
 
 class Enemy {
-  constructor(x, y, health = 100) {
+  x: number;
+  y: number;
+  health: number;
+  maxHealth: number;
+  progress: number;
+
+  constructor(x: number, y: number, health: number = 100) {
     this.x = x;
     this.y = y;
     this.health = health;
@@ -66,22 +89,29 @@ class Enemy {
     this.progress = 0;
   }
 
-  isAlive() {
+  isAlive(): boolean {
     return this.health > 0;
   }
 
-  update(gameSpeed) {
+  update(gameSpeed: number): void {
     this.progress += 1 * gameSpeed;
     this.x = this.progress * 4;
   }
 
-  reachedEnd() {
+  reachedEnd(): boolean {
     return this.progress >= 100;
   }
 }
 
 class Projectile {
-  constructor(x, y, targetX, targetY, damage, color) {
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+  damage: number;
+  color: string;
+
+  constructor(x: number, y: number, targetX: number, targetY: number, damage: number, color: string) {
     this.x = x;
     this.y = y;
     this.targetX = targetX;
@@ -90,7 +120,7 @@ class Projectile {
     this.color = color;
   }
 
-  update(gameSpeed) {
+  update(gameSpeed: number): boolean {
     const dx = this.targetX - this.x;
     const dy = this.targetY - this.y;
     const distance = Math.hypot(dx, dy);
@@ -103,30 +133,30 @@ class Projectile {
   }
 }
 
-const TowerDefenseGame = () => {
+const TowerDefenseGame: React.FC = () => {
   // 遊戲狀態
-  const [gold, setGold] = useState(200);
-  const [lives, setLives] = useState(20);
-  const [wave, setWave] = useState(1);
-  const [language, setLanguage] = useState('zh');
-  const [gameSpeed, setGameSpeed] = useState(1);
-  const [placingTower, setPlacingTower] = useState(null);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [gold, setGold] = useState<number>(200);
+  const [lives, setLives] = useState<number>(20);
+  // const [wave, setWave] = useState<number>(1); // 移除未使用的狀態
+  const [language, setLanguage] = useState<string>('zh');
+  const [gameSpeed, setGameSpeed] = useState<number>(1);
+  const [placingTower, setPlacingTower] = useState<string | null>(null);
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // 翻譯函數
-  const t = (key) => translations[language][key];
+  // 使用 useCallback 記憶化翻譯函數
+  const t = useCallback((key: string) => translations[language][key], [language]);
 
   // Canvas 引用
-  const canvasRef = useRef(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // 遊戲對象使用 Ref 管理
-  const towersRef = useRef([]);
-  const enemiesRef = useRef([]);
-  const projectilesRef = useRef([]);
-  const animationFrameId = useRef(null);
+  const towersRef = useRef<Tower[]>([]);
+  const enemiesRef = useRef<Enemy[]>([]);
+  const projectilesRef = useRef<Projectile[]>([]);
+  const animationFrameId = useRef<number | null>(null);
 
   // 添加塔
-  const addTower = (x, y, type) => {
+  const addTower = (x: number, y: number, type: string) => {
     const towerCost = towerTypes[type].cost;
     if (gold >= towerCost) {
       towersRef.current.push(new Tower(x, y, type));
@@ -141,8 +171,8 @@ const TowerDefenseGame = () => {
   };
 
   // 處理 Canvas 點擊
-  const handleCanvasClick = (event) => {
-    if (placingTower) {
+  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement, MouseEvent>) => {
+    if (placingTower && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
@@ -151,21 +181,24 @@ const TowerDefenseGame = () => {
   };
 
   // 處理鼠標移動
-  const handleCanvasMouseMove = (event) => {
-    const rect = canvasRef.current.getBoundingClientRect();
-    setMousePosition({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
+  const handleCanvasMouseMove = (event: React.MouseEvent<HTMLCanvasElement, MouseEvent>) => {
+    if (canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      setMousePosition({
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      });
+    }
   };
 
   // 遊戲循環
   useEffect(() => {
-    const ctx = canvasRef.current.getContext('2d');
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
 
     const gameLoop = () => {
       // 清除畫布
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
 
       const currentTime = Date.now();
 
@@ -257,14 +290,9 @@ const TowerDefenseGame = () => {
       if (defeatedEnemies > 0) {
         setLives(prev => prev - defeatedEnemies);
         setGold(prev => prev + defeatedEnemies * 10);
+        // 根據需要更新波數
+        // setWave(prevWave => prevWave + 1); // 例如
       }
-
-      if (defeatedEnemies > 0 && enemiesRef.current.length === 0) {
-        setWave(prevWave => prevWave + 1);
-        // 您可以在這裡根據新的波數生成更多敵人
-        // spawnEnemy(); // 或其他邏輯
-      }
-      
 
       // 渲染放置塔的範圍
       if (placingTower) {
@@ -279,12 +307,13 @@ const TowerDefenseGame = () => {
       // 渲染遊戲信息
       ctx.fillStyle = 'black';
       ctx.font = '16px Arial';
-      ctx.fillText(`${t('gold')}: ${gold} | ${t('lives')}: ${lives} | ${t('wave')}: ${wave}`, 10, 20);
-
+      ctx.fillText(`${t('gold')}: ${gold} | ${t('lives')}: ${lives}`, 10, 20);
+      // 如果需要使用波數，保持以下代碼
+      // ctx.fillText(`${t('gold')}: ${gold} | ${t('lives')}: ${lives} | ${t('wave')}: ${wave}`, 10, 20);
 
       // 檢查遊戲結束
       if (lives <= 0) {
-        cancelAnimationFrame(animationFrameId.current);
+        cancelAnimationFrame(animationFrameId.current!);
         alert('Game Over!');
         // 重置遊戲或其他處理
       } else {
@@ -294,8 +323,12 @@ const TowerDefenseGame = () => {
 
     animationFrameId.current = requestAnimationFrame(gameLoop);
 
-    return () => cancelAnimationFrame(animationFrameId.current);
-  }, [gold, lives, wave, gameSpeed, language, placingTower, mousePosition]);
+    return () => {
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
+    };
+  }, [gold, lives, gameSpeed, language, placingTower, mousePosition, t]);
 
   return (
     <div>
@@ -331,9 +364,9 @@ const TowerDefenseGame = () => {
           value={gameSpeed}
           onChange={(e) => setGameSpeed(Number(e.target.value))}
         >
-          <option value="0.5">0.5x</option>
-          <option value="1">1x</option>
-          <option value="2">2x</option>
+          <option value={0.5}>0.5x</option>
+          <option value={1}>1x</option>
+          <option value={2}>2x</option>
         </select>
       </div>
       <canvas
