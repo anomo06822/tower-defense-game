@@ -259,6 +259,13 @@ const TowerDefenseGame = () => {
         setGold(prev => prev + defeatedEnemies * 10);
       }
 
+      if (defeatedEnemies > 0 && enemiesRef.current.length === 0) {
+        setWave(prevWave => prevWave + 1);
+        // 您可以在這裡根據新的波數生成更多敵人
+        // spawnEnemy(); // 或其他邏輯
+      }
+      
+
       // 渲染放置塔的範圍
       if (placingTower) {
         ctx.strokeStyle = towerTypes[placingTower].color;
@@ -273,6 +280,7 @@ const TowerDefenseGame = () => {
       ctx.fillStyle = 'black';
       ctx.font = '16px Arial';
       ctx.fillText(`${t('gold')}: ${gold} | ${t('lives')}: ${lives} | ${t('wave')}: ${wave}`, 10, 20);
+
 
       // 檢查遊戲結束
       if (lives <= 0) {
