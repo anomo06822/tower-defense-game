@@ -105,14 +105,6 @@ class Tower {
   }
 }
 
-interface EnemyType {
-  name: string;
-  health: number;
-  maxHealth: number;
-  progress: number;
-  resistances: { [key: string]: number }; // 元素抗性，減少傷害百分比
-}
-
 class Enemy {
   x: number;
   y: number;
